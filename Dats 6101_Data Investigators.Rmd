@@ -1,0 +1,168 @@
+---
+title: "Final Project"
+author: "Data Investigators: Alexa Giftopoulos, Monica Sharma, Rahul Sethi, Amanraj Singh"
+date: "December 5, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r }
+library(RColorBrewer)
+library("cluster")
+library("fpc")
+library("corrplot")
+```
+This was a final project conducted by a group of George Washington University students for their Intro to Data Science course.
+
+For our final project we selected wholesale client data from UC Irvine Machine Learning Repository. Our data represents clients of a wholesale distributor and lists the annual spending for a group of products. Our goal for this project was to idenitfy the different types of establishments in our clientele and cluster them into distinct categories based on product purchase preferences. There has been other research on this topic utilizing regression models, distributi on analysis and Markov chain methodology. 
+
+The structure and sample of our data is displayed below:
+
+```{r}
+#Reading the csv file
+wholesaleData<-read.csv("Wholesale customers data.csv")
+head(wholesaleData)
+tail(wholesaleData)
+str(wholesaleData)
+```
+
+After our data has been loaded, we conducted exploratory data analysis to ensure our data was clean and prepared for further analysis. Shown in the boxplot below, it is clear that we had a significant amount of outliers that needed to be removed. Confirming in several histograms, our product variables were skewed to the right. 
+
+```{r}
+#EDA
+boxplot(wholesaleData)
+hist(wholesaleData$Fresh)
+hist(wholesaleData$Milk)
+hist(wholesaleData$Grocery)
+hist(wholesaleData$Frozen)
+hist(wholesaleData$Delicassen)
+```
+
+The code below displays our new, subsetted data that excludes majority of outliers from our data. We also removed the "Channel" and "Region" columns from our dataset as they were not relevant in our analysis. 
+
+```{r}
+#Subset Data
+wholesale <- subset(wholesaleData, Channel & Region & Fresh<30000 &
+                            Milk<20000 & Grocery<20000 & Frozen<5000
+                          & Detergents_Paper<10000 & Delicassen<3000)
+
+#Removing Channel and Region columns
+wholesale_sub<-wholesale[-1:-2]
+wholesale_sub
+View(wholesale_sub)
+head(wholesale_sub,10)
+tail(wholesale_sub,10)
+```
+
+Additionally, we noticed a large variance between the variables in our dataset. In order to get accurate clustering results, we needed to standardize our data. 
+
+```{r}
+#Scaling the data
+scaled_data<-scale(wholesale_sub)
+head(scaled_data)
+boxplot(scaled_data)
+
+#Verifiying the data after removing the outliers
+boxplot(wholesale)
+hist(wholesale$Fresh)
+hist(wholesale$Milk)
+hist(wholesale$Grocery)
+hist(wholesale$Frozen)
+hist(wholesale$Delicassen)
+```
+
+The last step in our EDA process and a key step in developing our research question was looking at the correlation between our product variables. You can see in the correlation plot below that clients tend to spend similar annual amounts or are consistently purchasing "milk" and "grocery" products together, or "grocery" and "detergents/paper" products, etc. This observation led us to inquire if there was a purchasing trend amongst our clients, or maybe different purchasing trends between different types of clients? 
+
+```{r}
+#Finding the Correlation 
+wholesale_cor<- cor(wholesale, method = "spearman")
+wholesale_cor
+
+#correlation between all the variables
+plot<-corrplot(wholesale_cor, method = "circle", type ="lower",tl.col="black",tl.srt = 45)
+```
+
+Our formal question developed into "What type of establishments does our client list entail?" To answer this question we determined that K means clustering would be the most effective methodology in providing us with our desired results. Our goal was to develop a clustering algorithm that successfully grouped our clientele into distinguished categories. 
+
+The first step in developing a k means clustering algorithm, is to "specify k." We did this using the Elbow Method, which is a suggested method in determining the optimal number of clusters or "k" we should use in our analysis. 
+
+```{r}
+#Elbow Method for finding the optimal number of clusters
+set.seed(100)
+
+# Compute and plot wss for k = 2 to k = 18.
+k.max <- 18
+data <- scaled_data
+
+wss <- sapply(1:k.max, 
+              function(k){kmeans(data, k, nstart=50,iter.max = 18 )$tot.withinss})
+wss
+plot(1:k.max, wss,
+     type="b", pch = 19, frame = FALSE, 
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+```
+
+After determining "k = 3," we were able to build our k means clustering algorithm. You can see below, our algorithm succesfully categorized our clients into three distinct clusters.
+
+```{r}
+result<-kmeans(data,3,algorithm = "Lloyd")
+result
+
+table(wholesale$Channel,result$cluster)
+
+colors <- c("blue","green","purple")
+```
+
+You can also see the results of our clustering algorithm in the plot below: 
+
+```{r}
+#Plot to represent the clusters
+plotcluster(data, result$cluster, col=colors[result$cluster],title(main='Clustering using K means'))
+```
+
+To analyze the product preferences in each of our three clusters, we subsetted our clustering results into "cluster 1," "cluster 2," "cluster 3." 
+
+In "cluster 1" below, you can see majority of spending was focused on fresh, grocery, and milk products, with little focus on deli, detergents/paper, and frozen products. There seems to be an overall high average of spending on all products, suggesting this cluster could potentially represent larger establishments. Given the assortment and preference of products and amount of spending, we can assume this cluster represents establishments like large restaurant chains. 
+
+```{r}
+# Color
+jBrewColors <- brewer.pal(n = 8, name = "Dark2")
+
+# Subset Cluster 1
+cluster1 <- (wholesale_sub[result$cluster==1,])
+
+# Cluster Bar Chart 
+cluster1_avg <- (sapply(cluster1, mean, na.rm=TRUE))
+cluster1_avg
+barplot(cluster1_avg, main="Cluster 1 Purchasing Habits", xlab="Products",ylab="Annual average spending",col = brewer.pal(n = 8, name = "Dark2"))
+```
+
+In "cluster 2" below, you can see majority of spending was focused on grocery, milk, and detergents/paper products, with little focus on frozen and deli products. There seems to be an overall high average of spending on all products, suggesting this cluster could potentially represent larger establishments as well. However, given this specific assortment and preference of products, we can assume this cluster most likely represents establishments like supermarket chains. 
+
+```{r}
+#Subset Cluster 2
+cluster2 <- (wholesale_sub[result$cluster==2,])
+
+#Cluster Bar Chart
+cluster2_avg <- (sapply(cluster2, mean, na.rm=TRUE))
+cluster2_avg
+barplot(cluster2_avg, main="Cluster 2 Purchasing Habits", xlab="Products",ylab="Annual average spending",col = brewer.pal(n = 8, name = "Dark2"))
+```
+
+In "cluster 3" below, you can see majority of spending was focused on fresh and grocery products, with little focus on detergents/paper and deli products. There seems to be an overall low average of spending on all products, suggesting this cluster could potentially represent smaller establishments. Given the assortment and preference of products and amount of spending, we can assume this cluster represents smaller fresh food establishments like local diners or cafe's. 
+
+```{r}
+#Subset Cluster 3
+cluster3 <- (wholesale_sub[result$cluster==3,])
+
+#Cluster Bar Chart 
+cluster3_avg <- (sapply(cluster3, mean, na.rm=TRUE))
+cluster3_avg
+barplot(cluster3_avg, main="Cluster 3 Purchasing Habits", xlab="Products",ylab="Annual average spending",col = brewer.pal(n = 8, name = "Dark2"))
+```
+
+In conclusion, our analysis sought to cluster our wholesale clients based on product preferences into three distinct categories. This anlaysis benefits us, as distributors, as well as our wholesale clients. This analysis benefits distributors by maximizing distribution center efficiency through reduced inventory, assortment planning, and improved space. It also benefits our wholesale clients by increasing their revenues in two ways: (1) by providing appropriate bundles and discounts based on their specific preferences, and (2) decreasing their inventory costs. Overall, increased revenue for our clients leads to increased satisfaction and loyalty on their end and on ours. 
